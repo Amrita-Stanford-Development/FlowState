@@ -55,10 +55,12 @@ fun FlowStateTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
+
+    // Note: No SideEffect block here anymore.
+    // The Status Bar is now handled entirely by MainActivity.
 
     MaterialTheme(
         colorScheme = colorScheme,

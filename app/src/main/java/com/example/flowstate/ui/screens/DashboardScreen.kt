@@ -1,7 +1,6 @@
 package com.example.flowstate.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.flowstate.data.SessionRepository
 import com.example.flowstate.model.DailyGoal
-import com.example.flowstate.model.Mood
 import com.example.flowstate.model.Session
 import java.text.SimpleDateFormat
 import java.util.*
@@ -370,7 +368,7 @@ fun SessionCard(
                     Text(
                         text = session.note,
                         fontSize = 14.sp,
-                        color = Color(0xFF999999),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, // Fixed hardcoded grey
                         maxLines = 1,
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -415,7 +413,7 @@ fun EmptySessionsCard() {
             Text(
                 text = "Start your first session!",
                 fontSize = 14.sp,
-                color = Color(0xFF999999),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, // Fixed hardcoded grey
                 textAlign = TextAlign.Center
             )
         }
@@ -437,7 +435,8 @@ fun SessionDetailDialog(
                 Text(text = session.mood.emoji, fontSize = 24.sp)
                 Text(
                     text = session.mood.label,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         },
@@ -477,7 +476,7 @@ fun SessionDetailDialog(
                 Text("Close")
             }
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface // FIXED: Was Color.White
     )
 }
 
@@ -530,10 +529,11 @@ fun DailyGoalCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
+            // FIXED: Now uses surface color for dark mode compatibility
             containerColor = if (sessionProgress >= 1f && minuteProgress >= 1f)
                 Color(0xFF4CAF50).copy(alpha = 0.1f)
             else
-                Color.White
+                MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(16.dp)
     ) {

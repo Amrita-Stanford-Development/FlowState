@@ -1,20 +1,23 @@
 package com.example.flowstate
 
+import android.app.Activity
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.view.WindowCompat
 import com.example.flowstate.data.SessionRepository
-import com.example.flowstate.model.Mood
 import com.example.flowstate.model.Screen
 import com.example.flowstate.model.Session
 import com.example.flowstate.ui.screens.*
@@ -23,35 +26,52 @@ import com.example.flowstate.ui.theme.FlowStateTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
 
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Keep bars transparent so we can see the Surface background behind them
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                Color.TRANSPARENT,
+                Color.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                Color.TRANSPARENT,
+                Color.TRANSPARENT
+            )
+        )
 
         setContent {
             var isDarkTheme by remember { mutableStateOf(false) }
 
-            FlowStateTheme(darkTheme = isDarkTheme) {
-                val backgroundColor = MaterialTheme.colorScheme.background
+            // Manage Status Bar Icon Colors (White icons for Dark Mode, Black for Light)
+            val view = LocalView.current
+            if (!view.isInEditMode) {
+                SideEffect {
+                    val window = (view.context as Activity).window
+                    val insetsController = WindowCompat.getInsetsController(window, view)
 
-                LaunchedEffect(backgroundColor) {
-                    window.statusBarColor = backgroundColor.toArgb()
-                    window.navigationBarColor = backgroundColor.toArgb()
-
-                    WindowCompat.getInsetsController(window, window.decorView).apply {
-                        isAppearanceLightStatusBars = !isDarkTheme
-                        isAppearanceLightNavigationBars = !isDarkTheme
-                    }
+                    // !isDarkTheme means:
+                    // If Dark Mode is ON -> isAppearanceLightStatusBars = FALSE -> White Icons
+                    // If Dark Mode is OFF -> isAppearanceLightStatusBars = TRUE -> Black Icons
+                    insetsController.isAppearanceLightStatusBars = !isDarkTheme
+                    insetsController.isAppearanceLightNavigationBars = !isDarkTheme
                 }
+            }
 
+            FlowStateTheme(darkTheme = isDarkTheme) {
+                // CHANGE IS HERE:
+                // 1. Surface fills the WHOLE screen (including behind status bar)
                 Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .safeDrawingPadding()
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background // Paints the area Black in Dark Mode
                 ) {
-                    FlowStateApp(
-                        isDarkTheme = isDarkTheme,
-                        onThemeToggle = { isDarkTheme = !isDarkTheme }
-                    )
+                    // 2. We add a container inside that respects the padding
+                    // This ensures your content doesn't go under the clock/battery
+                    Box(modifier = Modifier.safeDrawingPadding()) {
+                        FlowStateApp(
+                            isDarkTheme = isDarkTheme,
+                            onThemeToggle = { isDarkTheme = !isDarkTheme }
+                        )
+                    }
                 }
             }
         }
