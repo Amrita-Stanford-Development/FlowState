@@ -185,10 +185,13 @@ fun MoodSelectorScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (isCustomTimer)
+                            text = if (isCustomTimer) {
                                 "${customWorkDuration}min work / ${customBreakDuration}min break"
-                            else
-                                "${selectedPreset.workDuration}min work / ${selectedPreset.breakDuration}min break",
+                            } else if (selectedPreset.workDuration == 0) {
+                                "5s work / 5s break"
+                            } else {
+                                "${selectedPreset.workDuration}min work / ${selectedPreset.breakDuration}min break"
+                            },
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -335,7 +338,11 @@ fun TimerPresetDialog(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "${preset.workDuration}min work / ${preset.breakDuration}min break",
+                                    text = if (preset.workDuration == 0) {
+                                        "5s work / 5s break"
+                                    } else {
+                                        "${preset.workDuration}min work / ${preset.breakDuration}min break"
+                                    },
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

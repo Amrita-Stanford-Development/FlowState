@@ -1,5 +1,9 @@
 package com.example.flowstate.ui.screens
 
+import android.content.ContentResolver
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +31,7 @@ import com.example.flowstate.model.Mood
 import com.example.flowstate.util.MusicPlayer
 import com.example.flowstate.util.MusicTrack
 import kotlinx.coroutines.delay
+import java.io.File
 
 enum class FocusSound(val label: String, val emoji: String) {
     SILENCE("Silence", "🔇"),
@@ -54,7 +59,12 @@ fun PomodoroTimerScreen(
     var timerState by remember { mutableStateOf(TimerState.IDLE) }
     var currentWorkDuration by remember { mutableStateOf(workDuration) }
     var currentBreakDuration by remember { mutableStateOf(breakDuration) }
-    var timeLeft by remember { mutableStateOf(workDuration * 60) }
+
+    // Debug mode: if workDuration is 0, use 5 seconds instead of minutes
+    val workSeconds = if (workDuration == 0) 5 else workDuration * 60
+    val breakSeconds = if (breakDuration == 0) 5 else breakDuration * 60
+
+    var timeLeft by remember { mutableStateOf(workSeconds) }
     var isWorkSession by remember { mutableStateOf(true) }
     var selectedSound by remember { mutableStateOf(FocusSound.SILENCE) }
     var isSoundEnabled by remember { mutableStateOf(false) }
@@ -90,7 +100,7 @@ fun PomodoroTimerScreen(
         } else if (timerState == TimerState.RUNNING && timeLeft == 0) {
             if (isWorkSession) {
                 timerState = TimerState.BREAK
-                timeLeft = currentBreakDuration * 60
+                timeLeft = breakSeconds
                 isWorkSession = false
             } else {
                 timerState = TimerState.IDLE
@@ -223,7 +233,7 @@ fun PomodoroTimerScreen(
                         FloatingActionButton(
                             onClick = {
                                 timerState = TimerState.IDLE
-                                timeLeft = currentWorkDuration * 60
+                                timeLeft = workSeconds
                                 isWorkSession = true
                             },
                             containerColor = Color(0xFFEF5350),
@@ -268,31 +278,31 @@ fun PomodoroTimerScreen(
                     }
                 }
 
-                if (musicTracks.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Study Music",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF666666)
+                    )
+                    TextButton(onClick = { showMusicDialog = true }) {
                         Text(
-                            text = "Study Music",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF666666)
+                            text = if (musicPlayer.currentTrack.value != null)
+                                "Now Playing: ${musicPlayer.currentTrack.value?.name}"
+                            else
+                                "Browse Music",
+                            fontSize = 12.sp
                         )
-                        TextButton(onClick = { showMusicDialog = true }) {
-                            Text(
-                                text = if (musicPlayer.currentTrack.value != null)
-                                    "Now Playing: ${musicPlayer.currentTrack.value?.name}"
-                                else
-                                    "Browse Music",
-                                fontSize = 12.sp
-                            )
-                        }
                     }
+                }
 
+                if (musicTracks.isNotEmpty()) {
                     if (musicPlayer.currentTrack.value != null) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -367,7 +377,7 @@ fun PomodoroTimerScreen(
                     currentWorkDuration = newWork
                     currentBreakDuration = newBreak
                     if (timerState == TimerState.IDLE && isWorkSession) {
-                        timeLeft = newWork * 60
+                        timeLeft = if (newWork == 0) 5 else newWork * 60
                     }
                     showSettings = false
                 }
@@ -486,16 +496,97 @@ fun MusicBrowserDialog(
     onDismiss: () -> Unit,
     onTrackSelected: (MusicTrack) -> Unit
 ) {
+    val context = LocalContext.current
+    var showUploadMessage by remember { mutableStateOf(false) }
+    var uploadMessage by remember { mutableStateOf("") }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                // Get the file name
+                val fileName = getFileName(context.contentResolver, uri) ?: "music_${System.currentTimeMillis()}.mp3"
+                val sanitizedFileName = fileName.lowercase().replace(" ", "_").replace(Regex("[^a-z0-9_.]"), "")
+
+                // Copy file to app's music directory
+                val musicDir = File(context.filesDir, "music")
+                if (!musicDir.exists()) {
+                    musicDir.mkdirs()
+                }
+
+                val destFile = File(musicDir, sanitizedFileName)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                uploadMessage = "✅ Successfully added: ${fileName.removeSuffix(".mp3")}"
+                showUploadMessage = true
+            } catch (e: Exception) {
+                uploadMessage = "❌ Failed to upload file: ${e.message}"
+                showUploadMessage = true
+            }
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = "Study Music",
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Study Music",
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(
+                    onClick = { filePickerLauncher.launch("audio/*") }
+                ) {
+                    Text(
+                        text = "➕",
+                        fontSize = 24.sp
+                    )
+                }
+            }
         },
         text = {
-            if (musicTracks.isEmpty()) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (showUploadMessage) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (uploadMessage.startsWith("✅"))
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                            else
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = uploadMessage,
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { showUploadMessage = false }) {
+                                Text("✕", fontSize = 16.sp)
+                            }
+                        }
+                    }
+                }
+
+                if (musicTracks.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -510,12 +601,12 @@ fun MusicBrowserDialog(
                     Text(
                         text = "No music files found",
                         fontSize = 14.sp,
-                        color = Color(0xFF666666)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Add .mp3 files to res/raw folder",
+                        text = "Tap ➕ to upload music files",
                         fontSize = 12.sp,
-                        color = Color(0xFF999999)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
             } else {
@@ -526,11 +617,15 @@ fun MusicBrowserDialog(
                     items(musicTracks) { track ->
                         MusicTrackCard(
                             track = track,
-                            isSelected = currentTrack?.resourceId == track.resourceId,
+                            isSelected = currentTrack?.let {
+                                if (track.isFromFile) it.filePath == track.filePath
+                                else it.resourceId == track.resourceId
+                            } ?: false,
                             onClick = { onTrackSelected(track) }
                         )
                     }
                 }
+            }
             }
         },
         confirmButton = {
@@ -538,7 +633,7 @@ fun MusicBrowserDialog(
                 Text("Close")
             }
         },
-        containerColor = Color.White
+        containerColor = MaterialTheme.colorScheme.surface
     )
 }
 
@@ -556,12 +651,12 @@ fun MusicTrackCard(
             containerColor = if (isSelected)
                 Color(0xFF667eea).copy(alpha = 0.2f)
             else
-                Color.White
+                MaterialTheme.colorScheme.surface
         ),
         border = if (isSelected)
             androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF667eea))
         else
-            androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0E0E0)),
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(
@@ -579,7 +674,7 @@ fun MusicTrackCard(
                 text = track.name,
                 fontSize = 14.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) Color(0xFF333333) else Color(0xFF666666),
+                color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 2
             )
@@ -591,4 +686,18 @@ fun formatTime(seconds: Int): String {
     val minutes = seconds / 60
     val remainingSeconds = seconds % 60
     return String.format("%02d:%02d", minutes, remainingSeconds)
+}
+
+fun getFileName(contentResolver: ContentResolver, uri: Uri): String? {
+    var fileName: String? = null
+    val cursor = contentResolver.query(uri, null, null, null, null)
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (nameIndex != -1) {
+                fileName = it.getString(nameIndex)
+            }
+        }
+    }
+    return fileName
 }
