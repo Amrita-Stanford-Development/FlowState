@@ -32,12 +32,13 @@ fun DashboardScreen(
     isDarkTheme: Boolean = false,
     onThemeToggle: () -> Unit = {}
 ) {
-    val todaySessions = remember { SessionRepository.getTodaySessions() }
-    val allSessions = remember { SessionRepository.getAllSessions() }
-    val streak = remember { SessionRepository.getStreak() }
+    // Use derivedStateOf to automatically recompose when sessions change
+    val todaySessions by remember { derivedStateOf { SessionRepository.getTodaySessions() } }
+    val allSessions by remember { derivedStateOf { SessionRepository.getAllSessions() } }
+    val streak by remember { derivedStateOf { SessionRepository.getStreak() } }
     var selectedSession by remember { mutableStateOf<Session?>(null) }
     val dailyGoal = remember { DailyGoal() }
-    val todayMinutes = remember { todaySessions.sumOf { it.workDuration } }
+    val todayMinutes by remember { derivedStateOf { todaySessions.sumOf { it.workDuration } } }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(

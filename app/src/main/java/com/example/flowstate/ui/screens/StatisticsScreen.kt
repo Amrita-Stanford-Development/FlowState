@@ -24,25 +24,32 @@ import java.util.*
 fun StatisticsScreen(
     onBackClick: () -> Unit
 ) {
-    val sessions = remember { SessionRepository.getAllSessions() }
-    val totalMinutes = remember { sessions.sumOf { it.workDuration } }
-    val averageRating = remember {
-        val ratedSessions = sessions.filter { it.rating != null && it.rating > 0 }
-        if (ratedSessions.isNotEmpty()) {
-            ratedSessions.mapNotNull { it.rating }.average()
-        } else 0.0
+    // Use derivedStateOf to automatically recompose when sessions change
+    val sessions by remember { derivedStateOf { SessionRepository.getAllSessions() } }
+    val totalMinutes by remember { derivedStateOf { sessions.sumOf { it.workDuration } } }
+    val averageRating by remember {
+        derivedStateOf {
+            val ratedSessions = sessions.filter { it.rating != null && it.rating > 0 }
+            if (ratedSessions.isNotEmpty()) {
+                ratedSessions.mapNotNull { it.rating }.average()
+            } else 0.0
+        }
     }
 
-    val moodBreakdown = remember {
-        sessions.groupBy { it.mood }.mapValues { it.value.size }
+    val moodBreakdown by remember {
+        derivedStateOf {
+            sessions.groupBy { it.mood }.mapValues { it.value.size }
+        }
     }
 
-    val bestDay = remember {
-        sessions.groupBy { session ->
-            val cal = Calendar.getInstance()
-            cal.timeInMillis = session.startTime
-            SimpleDateFormat("MMM dd", Locale.getDefault()).format(cal.time)
-        }.maxByOrNull { it.value.size }
+    val bestDay by remember {
+        derivedStateOf {
+            sessions.groupBy { session ->
+                val cal = Calendar.getInstance()
+                cal.timeInMillis = session.startTime
+                SimpleDateFormat("MMM dd", Locale.getDefault()).format(cal.time)
+            }.maxByOrNull { it.value.size }
+        }
     }
 
     Scaffold(
@@ -60,7 +67,7 @@ fun StatisticsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF5F5F5))
+                .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -70,14 +77,14 @@ fun StatisticsScreen(
                     text = "Overview",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF333333)
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
 
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(
@@ -98,7 +105,7 @@ fun StatisticsScreen(
                         text = "Mood Distribution",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF333333),
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }
@@ -106,7 +113,7 @@ fun StatisticsScreen(
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(
@@ -127,7 +134,7 @@ fun StatisticsScreen(
                         text = "Personal Best",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF333333),
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }
@@ -143,17 +150,18 @@ fun StatisticsScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            val day = bestDay
                             Text(text = "🏆", fontSize = 48.sp)
                             Text(
-                                text = "Best Day: ${bestDay.key}",
+                                text = "Best Day: ${day?.key ?: "N/A"}",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF333333)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "${bestDay.value.size} sessions completed",
+                                text = "${day?.value?.size ?: 0} sessions completed",
                                 fontSize = 14.sp,
-                                color = Color(0xFF666666)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -165,7 +173,7 @@ fun StatisticsScreen(
                     text = "Productivity Tips",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF333333),
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
@@ -206,14 +214,14 @@ fun StatRow(label: String, value: String, emoji: String) {
             Text(
                 text = label,
                 fontSize = 16.sp,
-                color = Color(0xFF666666)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Text(
             text = value,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF333333)
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -238,7 +246,7 @@ fun MoodStatRow(mood: Mood, count: Int, total: Int) {
                 Text(
                     text = mood.label,
                     fontSize = 16.sp,
-                    color = Color(0xFF666666)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Text(
@@ -270,7 +278,7 @@ fun TipItem(emoji: String, text: String) {
         Text(
             text = text,
             fontSize = 14.sp,
-            color = Color(0xFF666666)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

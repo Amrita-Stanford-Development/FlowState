@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.example.flowstate.model.Mood
 import com.example.flowstate.util.MusicPlayer
 import com.example.flowstate.util.MusicTrack
+import com.example.flowstate.util.FocusSoundPlayer
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -54,6 +55,7 @@ fun PomodoroTimerScreen(
 ) {
     val context = LocalContext.current
     val musicPlayer = remember { MusicPlayer(context) }
+    val focusSoundPlayer = remember { FocusSoundPlayer(context) }
     val musicTracks = remember { MusicPlayer.getMusicTracks(context) }
 
     var timerState by remember { mutableStateOf(TimerState.IDLE) }
@@ -74,6 +76,7 @@ fun PomodoroTimerScreen(
     DisposableEffect(Unit) {
         onDispose {
             musicPlayer.release()
+            focusSoundPlayer.release()
         }
     }
 
@@ -268,10 +271,18 @@ fun PomodoroTimerScreen(
                             isSelected = selectedSound == sound && isSoundEnabled,
                             onClick = {
                                 if (selectedSound == sound && isSoundEnabled) {
+                                    // Turn off the sound
                                     isSoundEnabled = false
+                                    focusSoundPlayer.stop()
                                 } else {
+                                    // Turn on the sound
                                     selectedSound = sound
                                     isSoundEnabled = true
+                                    when (sound) {
+                                        FocusSound.SILENCE -> focusSoundPlayer.stop()
+                                        FocusSound.RAIN -> focusSoundPlayer.play(FocusSoundPlayer.FocusSound.RAIN)
+                                        FocusSound.CAFE -> focusSoundPlayer.play(FocusSoundPlayer.FocusSound.CAFE)
+                                    }
                                 }
                             }
                         )
@@ -499,6 +510,12 @@ fun MusicBrowserDialog(
     val context = LocalContext.current
     var showUploadMessage by remember { mutableStateOf(false) }
     var uploadMessage by remember { mutableStateOf("") }
+    var tracksState by remember { mutableStateOf(musicTracks) }
+
+    // Update tracks state when musicTracks changes
+    LaunchedEffect(musicTracks) {
+        tracksState = musicTracks
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -524,8 +541,30 @@ fun MusicBrowserDialog(
 
                 uploadMessage = "✅ Successfully added: ${fileName.removeSuffix(".mp3")}"
                 showUploadMessage = true
+                // Refresh the tracks list
+                tracksState = MusicPlayer.getMusicTracks(context)
             } catch (e: Exception) {
                 uploadMessage = "❌ Failed to upload file: ${e.message}"
+                showUploadMessage = true
+            }
+        }
+    }
+
+    val onDeleteTrack: (MusicTrack) -> Unit = { track ->
+        if (track.isFromFile) {
+            try {
+                val file = File(track.filePath!!)
+                if (file.exists() && file.delete()) {
+                    uploadMessage = "✅ Successfully deleted: ${track.name}"
+                    showUploadMessage = true
+                    // Refresh the tracks list
+                    tracksState = MusicPlayer.getMusicTracks(context)
+                } else {
+                    uploadMessage = "❌ Failed to delete file"
+                    showUploadMessage = true
+                }
+            } catch (e: Exception) {
+                uploadMessage = "❌ Failed to delete file: ${e.message}"
                 showUploadMessage = true
             }
         }
@@ -586,7 +625,7 @@ fun MusicBrowserDialog(
                     }
                 }
 
-                if (musicTracks.isEmpty()) {
+                if (tracksState.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -614,14 +653,17 @@ fun MusicBrowserDialog(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    items(musicTracks) { track ->
+                    items(tracksState) { track ->
                         MusicTrackCard(
                             track = track,
                             isSelected = currentTrack?.let {
                                 if (track.isFromFile) it.filePath == track.filePath
                                 else it.resourceId == track.resourceId
                             } ?: false,
-                            onClick = { onTrackSelected(track) }
+                            onClick = { onTrackSelected(track) },
+                            onDelete = if (track.isFromFile) {
+                                { onDeleteTrack(track) }
+                            } else null
                         )
                     }
                 }
@@ -641,7 +683,8 @@ fun MusicBrowserDialog(
 fun MusicTrackCard(
     track: MusicTrack,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier
@@ -659,25 +702,42 @@ fun MusicTrackCard(
             androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "🎵",
-                fontSize = 40.sp
-            )
-            Text(
-                text = track.name,
-                fontSize = 14.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                maxLines = 2
-            )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "🎵",
+                    fontSize = 40.sp
+                )
+                Text(
+                    text = track.name,
+                    fontSize = 14.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    maxLines = 2
+                )
+            }
+
+            // Show delete button only for user-uploaded files
+            if (onDelete != null) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(32.dp)
+                ) {
+                    Text(
+                        text = "❌",
+                        fontSize = 16.sp
+                    )
+                }
+            }
         }
     }
 }

@@ -1,15 +1,87 @@
 package com.example.flowstate.data
 
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.mutableStateListOf
+import com.example.flowstate.model.Mood
 import com.example.flowstate.model.Session
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
 object SessionRepository {
     private val sessions = mutableStateListOf<Session>()
+    private var sharedPreferences: SharedPreferences? = null
+    private const val PREFS_NAME = "flowstate_sessions"
+    private const val KEY_SESSIONS = "sessions"
+
+    fun initialize(context: Context) {
+        if (sharedPreferences == null) {
+            sharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            loadSessions()
+        }
+    }
+
+    private fun loadSessions() {
+        try {
+            val sessionsJson = sharedPreferences?.getString(KEY_SESSIONS, null)
+            if (sessionsJson != null) {
+                val jsonArray = JSONArray(sessionsJson)
+                sessions.clear()
+                for (i in 0 until jsonArray.length()) {
+                    val sessionObj = jsonArray.getJSONObject(i)
+                    val session = Session(
+                        id = sessionObj.getLong("id"),
+                        mood = Mood.valueOf(sessionObj.getString("mood")),
+                        note = sessionObj.optString("note", ""),
+                        workDuration = sessionObj.getInt("workDuration"),
+                        breakDuration = sessionObj.getInt("breakDuration"),
+                        startTime = sessionObj.getLong("startTime"),
+                        endTime = if (sessionObj.has("endTime")) sessionObj.getLong("endTime") else null,
+                        rating = if (sessionObj.has("rating")) sessionObj.getInt("rating") else null
+                    )
+                    sessions.add(session)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun saveSessions() {
+        try {
+            val jsonArray = JSONArray()
+            sessions.forEach { session ->
+                val sessionObj = JSONObject().apply {
+                    put("id", session.id)
+                    put("mood", session.mood.name)
+                    put("note", session.note)
+                    put("workDuration", session.workDuration)
+                    put("breakDuration", session.breakDuration)
+                    put("startTime", session.startTime)
+                    if (session.endTime != null) put("endTime", session.endTime)
+                    if (session.rating != null) put("rating", session.rating)
+                }
+                jsonArray.put(sessionObj)
+            }
+            sharedPreferences?.edit()?.putString(KEY_SESSIONS, jsonArray.toString())?.apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     fun addSession(session: Session) {
         sessions.add(session)
+        saveSessions()
+    }
+
+    fun updateSession(session: Session) {
+        val index = sessions.indexOfFirst { it.id == session.id }
+        if (index != -1) {
+            sessions[index] = session
+            saveSessions()
+        }
     }
 
     fun getAllSessions(): List<Session> = sessions.toList()

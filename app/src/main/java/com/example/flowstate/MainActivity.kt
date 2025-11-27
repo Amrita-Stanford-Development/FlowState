@@ -27,6 +27,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize SessionRepository to load saved sessions
+        SessionRepository.initialize(applicationContext)
+
         // Keep bars transparent so we can see the Surface background behind them
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
@@ -97,10 +100,28 @@ fun FlowStateApp(
         is Screen.MoodSelector -> {
             MoodSelectorScreen(
                 onMoodSelected = { mood, note, workDuration, breakDuration ->
-                    currentScreen = Screen.PomodoroTimer(mood, note, workDuration, breakDuration)
+                    // If mood is stressed or tired, start with breathing exercise
+                    currentScreen = if (mood == com.example.flowstate.model.Mood.STRESSED ||
+                                       mood == com.example.flowstate.model.Mood.TIRED) {
+                        Screen.BreathingExercise(mood, note, workDuration, breakDuration)
+                    } else {
+                        Screen.PomodoroTimer(mood, note, workDuration, breakDuration)
+                    }
                 },
                 onBackPressed = {
                     currentScreen = Screen.Dashboard
+                }
+            )
+        }
+        is Screen.BreathingExercise -> {
+            BreathingExerciseScreen(
+                onComplete = {
+                    currentScreen = Screen.PomodoroTimer(
+                        screen.mood,
+                        screen.note,
+                        screen.workDuration,
+                        screen.breakDuration
+                    )
                 }
             )
         }
@@ -131,10 +152,9 @@ fun FlowStateApp(
             SessionRatingScreen(
                 mood = screen.session.mood,
                 onRatingSelected = { rating ->
-                    currentSession?.let { session ->
-                        val updatedSession = session.copy(rating = rating)
-                        SessionRepository.addSession(updatedSession)
-                    }
+                    val session = screen.session.copy(rating = rating)
+                    SessionRepository.addSession(session)
+                    currentSession = null
                     currentScreen = Screen.Dashboard
                 }
             )

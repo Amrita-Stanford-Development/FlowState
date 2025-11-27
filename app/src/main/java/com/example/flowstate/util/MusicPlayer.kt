@@ -82,14 +82,15 @@ class MusicPlayer(private val context: Context) {
         fun getMusicTracks(context: Context): List<MusicTrack> {
             val tracks = mutableListOf<MusicTrack>()
 
-            // Load from res/raw
+            // Load from res/raw (excluding focus sounds like rain and cafe)
             try {
                 val fields = Class.forName("${context.packageName}.R\$raw").declaredFields
                 for (field in fields) {
                     try {
                         val resourceId = field.getInt(null)
                         val fileName = field.name
-                        if (fileName != "music_readme") {
+                        // Exclude focus sounds and readme file
+                        if (fileName != "music_readme" && fileName != "rain" && fileName != "cafe") {
                             val displayName = fileName
                                 .replace('_', ' ')
                                 .split(' ')
